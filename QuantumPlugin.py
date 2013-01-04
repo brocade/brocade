@@ -176,11 +176,6 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         self.physical_interface = config.get('PHYSICAL_INTERFACE',
                                              'physical_interface')
 
-        #options = {'sql_connection': "mysql://%s:%s@%s/%s" %
-        #           (DB_USER, DB_PASS, DB_HOST, DB_NAME),
-        #           'base': models_v2.model_base.BASEV2
-        #           }
-
         sql_connection = config.get('DATABASE', 'sql_connection')
         sql_dbpool_enable = False
         options = {
@@ -254,6 +249,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
         LOG.warning("BrcdPluginV2:get_networks() called")
 
+        #
         #if filters.get("shared"):
         #LOG.warning("Shared")
         #return []
@@ -317,11 +313,6 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         p['vlan'] = vlan_id
         brcd_db.create_port(port_id, network_id, physical_interface,
                             vlan_id, tenant_id, admin_state_up)
-
-#        if self.agent_rpc:
-#            self.notifier.port_update(self.rpc_context, p,
-#                                      'em1',
-#                                      vlan_id)
         return p
 
     def update_port(self, context, id, port):
