@@ -1,11 +1,5 @@
-BrocadeQuantum
-==============
-
-openstack-quantum
-=================
-
-Brocade Openstack Quantum Plugin
-================================
+Brocade Quantum Plugin
+======================
 
 http://wiki.openstack.org/brocade-quantum-plugin
 
@@ -39,22 +33,22 @@ Configuration
 1. Specify to Quantum that you will be using the Brocade Plugin, this is done
 by setting the parameter core_plugin in Quantum
 
-   core_plugin = quantum.plugins.brocade.QuantumPlugin.BrcdPluginV2<br><br>
+   core_plugin = quantum.plugins.brocade.QuantumPlugin.BrcdPluginV2
 
 
 2. Switch and brocade specific database configuration is specified in the config file located
 on the setup at:
 
-   /etc/quantum/plugins/brocade/brocade.ini<br>
+   /etc/quantum/plugins/brocade/brocade.ini
 
-   [SWITCH]<br>
-   username = admin<br>
-   password = password<br>
-   address  = <switch mgmt ip address><br>
-   ostype   = NOS<br>
-<br>
-   [DATABASE]<br>
-   sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8<br>
+   [SWITCH]
+   username = admin
+   password = password
+   address  = <switch mgmt ip address>
+   ostype   = NOS
+
+   [DATABASE]
+   sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8
 
    (please see list of more configurable parameters in the brocade.ini file)
 
@@ -64,4 +58,3 @@ Devstack
 
 Please see special notes for devstack at:
 http://wiki.openstack.org/brocade-quantum-plugin
-
