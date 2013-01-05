@@ -47,7 +47,8 @@ from quantum.plugins.brocade.nos import nosdriver as nos
 
 CONFIG_FILE = "brocade.ini"
 CONFIG_FILE_PATH = "/etc/quantum/plugins/brocade/"
-LOG = logging.getLogger("QuantumPlugin")
+LOG = logging.getLogger(__name__)
+#LOG = logging.getLogger("QuantumPlugin")
 
 
 def parse_config():
