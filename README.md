@@ -61,26 +61,26 @@ Configuration
 =============
 
 1. Specify to Quantum that you will be using the Brocade Plugin, this is done
-by setting the parameter core_plugin in Quantum
+by setting the parameter core_plugin in Quantum:
 
-   core_plugin = quantum.plugins.brocade.QuantumPlugin.BrcdPluginV2<br><br>
+        core_plugin = quantum.plugins.brocade.QuantumPlugin.BrcdPluginV2
 
 
 2. Switch and brocade specific database configuration is specified in the config file located
 on the setup at:
 
-      /etc/quantum/plugins/brocade/brocade.ini<br>
-
-      [SWITCH]
-      username = admin
-      password = password
-      address  = <switch mgmt ip address>
-      ostype   = NOS
-      
-      [DATABASE]
-      sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8
-      
-      (please see list of more configurable parameters in the brocade.ini file)
+        % cat /etc/quantum/plugins/brocade/brocade.ini
+        
+        [SWITCH]
+        username = admin
+        password = password
+        address  = <switch mgmt ip address>
+        ostype   = NOS
+        
+        [DATABASE]
+        sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8
+        
+        (please see list of more configurable parameters in the brocade.ini file)
 
 
 Devstack
