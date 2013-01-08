@@ -7,8 +7,6 @@ openstack-quantum
 Brocade Openstack Quantum Plugin
 ================================
 
-http://wiki.openstack.org/brocade-quantum-plugin
-
 Opentack Brocade Quantum Plugin implements the Quantum v2.0 API.
 
 It is meant for orchestrating Brocade VCS switches running NOS, examples of these are:
@@ -55,8 +53,8 @@ Running setup.py will approp. permissions will copy the default configuration
 file to /etc/quantum/plugins/brocade/brocade.ini. This file MUST be edited to
 suite your enviroment.
 
-% cd /opt/stack/quantum/quantum/plugins/brocade
-% python setup.py
+      % cd /opt/stack/quantum/quantum/plugins/brocade
+      % python setup.py
 
 
 Configuration
@@ -73,15 +71,15 @@ on the setup at:
 
    /etc/quantum/plugins/brocade/brocade.ini<br>
 
-   [SWITCH]<br>
-   username = admin<br>
-   password = password<br>
-   address  = <switch mgmt ip address><br>
-   ostype   = NOS<br>
-<br>
+   [SWITCH]
+   username = admin
+   password = password
+   address  = <switch mgmt ip address>
+   ostype   = NOS
+   
    [DATABASE]<br>
    sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8<br>
-
+   
    (please see list of more configurable parameters in the brocade.ini file)
 
 
