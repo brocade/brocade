@@ -11,7 +11,7 @@ http://wiki.openstack.org/brocade-quantum-plugin
 
 Opentack Brocade Quantum Plugin implements the Quantum v2.0 API.
 
-It is meant for orchestrating switches running NOS examples of these are:
+It is meant for orchestrating Brocade VCS switches running NOS, examples of these are:
 
    1. VDX 67xx series of switches
    2. VDX 87xx series of switches
@@ -23,11 +23,11 @@ to configure the Brocade switch.
 
              +------------+        +------------+          +-------------+
              |            |        |            |          |             |
-             |            |        |            |          |  Brocade    |
-             | Openstack  |  v2.0  |  Brocade   |  NETCONF |  Switch     |
-             | Quantum    +--------+  Quantum   +----------+  VDX 67xx   |
-             |            |        |  Plugin    |          |  VCD 87xx   |
-             |            |        |            |          |             |
+             |            |        |            |          |   Brocade   |
+             | Openstack  |  v2.0  |  Brocade   |  NETCONF |  VCS Switch |
+             | Quantum    +--------+  Quantum   +----------+             |
+             |            |        |  Plugin    |          |  VDX 67xx   |
+             |            |        |            |          |  VDX 87xx   |
              |            |        |            |          |             |
              |            |        |            |          |             |
              +------------+        +------------+          +-------------+
