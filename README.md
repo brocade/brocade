@@ -69,18 +69,18 @@ by setting the parameter core_plugin in Quantum
 2. Switch and brocade specific database configuration is specified in the config file located
 on the setup at:
 
-   /etc/quantum/plugins/brocade/brocade.ini<br>
+      /etc/quantum/plugins/brocade/brocade.ini<br>
 
-   [SWITCH]
-   username = admin
-   password = password
-   address  = <switch mgmt ip address>
-   ostype   = NOS
-   
-   [DATABASE]<br>
-   sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8<br>
-   
-   (please see list of more configurable parameters in the brocade.ini file)
+      [SWITCH]
+      username = admin
+      password = password
+      address  = <switch mgmt ip address>
+      ostype   = NOS
+      
+      [DATABASE]
+      sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8
+      
+      (please see list of more configurable parameters in the brocade.ini file)
 
 
 Devstack
