@@ -1,5 +1,5 @@
-# Copyright (c) 2012 Brocade Communications Systems, Inc.
-# All Rights Reserved.
+# Copyright 2012 Brocade Communications System, Inc.
+# All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -12,7 +12,11 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
+#
+# Authors:
+# Varma Bhupatiraju (vbhupati@#brocade.com)
+# Shiv Haris (sharis@brocade.com)
+#
 """
 Brocade NOS Driver implements NETCONF over SSHv2 for
 Quantum network life-cycle management

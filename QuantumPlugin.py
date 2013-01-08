@@ -15,6 +15,10 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 #
+# Authors:
+# Shiv Haris (sharis@brocade.com)
+# Varma Bhupatiraju (vbhupati@#brocade.com)
+#
 import ConfigParser
 import json
 import hashlib

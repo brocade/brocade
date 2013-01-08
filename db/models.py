@@ -1,4 +1,3 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
 # Copyright 2012 Brocade Communications System, Inc.
 # All rights reserved.
@@ -14,7 +13,11 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
-
+#
+# Authors:
+# Shiv Haris (sharis@brocade.com)
+# Varma Bhupatiraju (vbhupati@#brocade.com)
+#
 import logging
 import sqlalchemy as sa
 

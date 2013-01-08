@@ -33,6 +33,32 @@ to configure the Brocade switch.
              +------------+        +------------+          +-------------+
 
 
+Directory Structure
+===================
+
+Normally you will have your directory structure as follows:
+
+         /opt/stack/nova/
+         /opt/stack/horizon/
+         ...
+         /opt/stack/quantum/quantum/plugins/
+
+This repository represents code that will be put as:
+
+         /opt/stack/quantum/quantum/plugins/brocade
+
+
+Running Setup.py
+================
+
+Running setup.py will approp. permissions will copy the default configuration
+file to /etc/quantum/plugins/brocade/brocade.ini. This file MUST be edited to
+suite your enviroment.
+
+% cd /opt/stack/quantum/quantum/plugins/brocade
+% python setup.py
+
+
 Configuration
 =============
 

@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import pdb
 
 import eventlet
 import pyudev
@@ -776,9 +777,8 @@ class LinuxBridgeQuantumAgentRPC:
 
 def main():
     eventlet.monkey_patch()
+    pdb.set_trace()
     cfg.CONF(args=sys.argv, project='quantum')
-
-    # (TODO) gary - swap with common logging
 
     logging_config.setup_logging(cfg.CONF)
     interface_mappings = {}
