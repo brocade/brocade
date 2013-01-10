@@ -254,10 +254,8 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
         LOG.warning("BrcdPluginV2:get_networks() called")
 
-        #
-        #if filters.get("shared"):
-        #LOG.warning("Shared")
-        #return []
+        if filters.get("shared") == [True]:
+            return []
 
         nets = super(BrcdPluginV2, self).get_networks(context)
         for net in nets:
