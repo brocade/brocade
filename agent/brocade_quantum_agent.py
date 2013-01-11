@@ -9,7 +9,6 @@ import signal
 import subprocess
 import sys
 import time
-import pdb
 
 import eventlet
 import pyudev
@@ -25,7 +24,7 @@ from quantum.openstack.common import cfg
 from quantum.openstack.common import context
 from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
-from quantum.plugins.linuxbridge.common import config
+from quantum.plugins.brocade.agent import config
 from quantum.plugins.linuxbridge.common import constants as lconst
 
 logging.basicConfig()
@@ -777,9 +776,7 @@ class LinuxBridgeQuantumAgentRPC:
 
 def main():
     eventlet.monkey_patch()
-    pdb.set_trace()
     cfg.CONF(args=sys.argv, project='quantum')
-
     logging_config.setup_logging(cfg.CONF)
     interface_mappings = {}
 
