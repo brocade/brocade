@@ -93,7 +93,7 @@ class LinuxBridgeRpcCallbacks():
                      'vlan_id': port.vlan_id,
                      'network_id': port.network_id,
                      'port_id': port.port_id,
-                     'physical_interface': port.physical_interface,
+                     'physical_network': port.physical_interface,
                      'admin_state_up': port.admin_state_up
                      }
 
