@@ -1,0 +1,4 @@
+nostest.py: tests the functionaity of the Quantum plugin,
+            (requires the setup to have a VDX/NOS switch installed)
+noscli.py: CLI interface to create and delete network
+           (requires the setup to have a VDX/NOS switch installed)
