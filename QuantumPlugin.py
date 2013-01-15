@@ -183,10 +183,9 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
         sql_connection = config.get('DATABASE', 'sql_connection')
         sql_dbpool_enable = False
-        options = {
-            "sql_connection": sql_connection,
-            "sql_dbpool_enable": sql_dbpool_enable
-            }
+        options = {"sql_connection": sql_connection,
+                   "sql_dbpool_enable": sql_dbpool_enable
+                   }
         db.configure_db(options)
 
         self._drv = nos.NOSdriver()
