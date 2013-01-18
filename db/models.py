@@ -53,7 +53,7 @@ def delete_network(id):
         session.flush()
     except sa.orm.exc.NoResultFound:
         LOG.warning("del_net(): NotFound net for "
-                    "vlan_id: %s" % id)
+                    "net_id: %s" % id)
 
 
 def get_network(id):
@@ -106,7 +106,6 @@ def create_port(port_id, network_id, physical_interface,
 
 def get_port(port_id):
 
-    LOG.warning("get_port_from_device(port_id = %s) " % port_id)
     session = db.get_session()
     try:
         x = (session.query(Brcd_Port).
@@ -119,3 +118,15 @@ def get_port(port_id):
         return None
 
     return None
+
+def delete_port(port_id):
+    session = db.get_session()
+    try:
+        port = (session.query(Brcd_Port).filter_by(port_id=port_id).one())
+        session.delete(port)
+        session.flush()
+    except sa.orm.exc.NoResultFound:
+        LOG.warning("del_port(): NotFound net for "
+                    "port_id: %s" % id)
+
+

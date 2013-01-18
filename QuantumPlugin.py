@@ -231,7 +231,6 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
     def delete_network(self, context, id):
 
-        # Not tested
         net = brcd_db.get_network(id)
         vlan_id = net['vlan']
 
@@ -323,6 +322,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
     def delete_port(self, context, id):
         LOG.warning("BrcdPluginV2:delete_port() called")
+        brcd_db.delete_port(id)
         return super(BrcdPluginV2, self).delete_port(context, id)
 
     def get_port(self, context, id, fields=None):

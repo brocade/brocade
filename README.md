@@ -1,6 +1,11 @@
-
 Brocade Openstack Quantum Plugin
 ================================
+
+( more up-to-date version of these instructions are located at:
+  http://wiki.openstack.org/brocade-quantum-plugin
+)
+
+
 
 Openstack Brocade Quantum Plugin implements the Quantum v2.0 API.
 
