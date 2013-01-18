@@ -186,7 +186,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         options = {"sql_connection": sql_connection,
                    "sql_dbpool_enable": sql_dbpool_enable
                    }
-        db.configure_db(options)
+        db.configure_db()
 
         self._drv = nos.NOSdriver()
         self._vbm = VlanBitmap()
