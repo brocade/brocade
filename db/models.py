@@ -119,6 +119,7 @@ def get_port(port_id):
 
     return None
 
+
 def delete_port(port_id):
     session = db.get_session()
     try:
@@ -128,5 +129,3 @@ def delete_port(port_id):
     except sa.orm.exc.NoResultFound:
         LOG.warning("del_port(): NotFound net for "
                     "port_id: %s" % id)
-
-

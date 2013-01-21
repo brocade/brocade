@@ -122,8 +122,6 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
                      'admin_state_up': port.admin_state_up
                      }
 
-            # Set the port status to UP
-            #db.set_port_status(port['id'], q_const.PORT_STATUS_ACTIVE)
         else:
             entry = {'device': device}
             LOG.debug("%s can not be found in database", device)
@@ -131,7 +129,7 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
 
     def update_device_down(self, rpc_context, **kwargs):
         """Device no longer exists on agent"""
-        # (TODO) garyk - live migration and port status
+
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s no longer exists on %(agent_id)s"),
