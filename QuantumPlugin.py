@@ -65,12 +65,8 @@ from quantum.plugins.brocade.nos import nosdriver as nos
 CONFIG_FILE = "brocade.ini"
 CONFIG_FILE_PATH = "/etc/quantum/plugins/brocade/"
 LOG = logging.getLogger(__name__)
-
-
-def parse_config():
-    """Parse config file
-    """
-    return
+PLUGIN_VERSION = 0.88
+AGENT_OWNER_PREFIX = "network:"
 
 
 class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
@@ -95,9 +91,11 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
     def get_port_from_device(cls, device):
         """Get port from the brocade specific db."""
         port = brcd_db.get_port(device[cls.TAP_PREFIX_LEN:])
+        # TODO(shiv): need to extend the db model to include device owners
+        # make it appears that the device owner is of type network
         if port:
             port['device'] = device
-            port['device_owner'] = "network:"
+            port['device_owner'] = AGENT_OWNER_PREFIX
         return port
 
     def get_device_details(self, rpc_context, **kwargs):
@@ -272,8 +270,6 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
     def get_networks(self, context, filters=None, fields=None):
         """Get port-profiles on the physical switch."""
 
-        LOG.warning("BrcdPluginV2:get_networks() called")
-
         if filters.get("shared") == [True]:
             return []
 
@@ -340,16 +336,17 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return p
 
     def update_port(self, context, id, port):
-        LOG.warning("BrcdPluginV2:update_port() called")
+        #
+        # Currently this does nothing for the physical switch
+        # we will support this for g-vlan (in future)
+        #
         return super(BrcdPluginV2, self).update_port(context, id, port)
 
     def delete_port(self, context, id):
-        LOG.warning("BrcdPluginV2:delete_port() called")
         brcd_db.delete_port(id)
         return super(BrcdPluginV2, self).delete_port(context, id)
 
     def get_port(self, context, id, fields=None):
-        LOG.warning("BrcdPluginV2:get_port() called")
         quantum_db = super(BrcdPluginV2, self).get_port(context, id, fields)
         return quantum_db
 
