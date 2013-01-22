@@ -40,23 +40,17 @@ from quantum.common import exceptions as q_exc
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.common import utils
-from quantum.db import api as db_api
-
-#from quantum.agent import securitygroups_rpc as sg_rpc
-#from quantum.api.v2 import attributes
-#from quantum.common import exceptions as exception
 
 from quantum.db import api as db
-
+from quantum.db import api as db_api
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
+from quantum.db import model_base
+from quantum.db import models_v2
 from quantum.db import quota_db
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
-
-from quantum.db import models_v2
-from quantum.common import topics
 
 from quantum.openstack.common import cfg
 from quantum.openstack.common import context
@@ -64,14 +58,13 @@ from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
 
-from quantum.db import model_base
+from quantum.plugins.brocade import vlanbm as vbm
 from quantum.plugins.brocade.db import models as brcd_db
 from quantum.plugins.brocade.nos import nosdriver as nos
 
 CONFIG_FILE = "brocade.ini"
 CONFIG_FILE_PATH = "/etc/quantum/plugins/brocade/"
 LOG = logging.getLogger(__name__)
-#LOG = logging.getLogger("QuantumPlugin")
 
 
 def parse_config():
@@ -100,6 +93,7 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
 
     @classmethod
     def get_port_from_device(cls, device):
+        """Get port from the brocade specific db."""
         port = brcd_db.get_port(device[cls.TAP_PREFIX_LEN:])
         if port:
             port['device'] = device
@@ -107,7 +101,7 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         return port
 
     def get_device_details(self, rpc_context, **kwargs):
-        """Agent requests device details"""
+        """Agent requests device details."""
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
@@ -191,7 +185,9 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
     """
 
     def __init__(self, loglevel=None):
-
+        """Initialize Brocade Plugin, specify switch address
+        and db configuration.
+        """
         config = ConfigParser.ConfigParser()
         configfile = CONFIG_FILE_PATH + CONFIG_FILE
         LOG.debug("Using BQP configuration file: %s" % configfile)
@@ -214,7 +210,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         db.configure_db()
 
         self._drv = nos.NOSdriver()
-        self._vbm = VlanBitmap()
+        self._vbm = vbm.VlanBitmap()
 
         self.agent_rpc = True
         self._setup_rpc()
@@ -233,12 +229,10 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         self.conn.consume_in_thread()
         self.notifier = AgentNotifierApi(topics.AGENT)
 
-    def get_all_networks(self, tenant_id, **kwargs):
-        networks = []
-        return networks
-
     def create_network(self, context, network, policy=None):
-
+        """This call to create network translate to creation of
+        port-profile on the physical switch.
+        """
         net = network['network']
         tenant_id = net['tenant_id']
         network_name = net['name']
@@ -255,7 +249,9 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return super(BrcdPluginV2, self).create_network(context, network)
 
     def delete_network(self, context, id):
-
+        """This call to delete the network translates to removing
+        the port-profile
+        """
         net = brcd_db.get_network(id)
         vlan_id = net['vlan']
 
@@ -274,6 +270,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return result
 
     def get_networks(self, context, filters=None, fields=None):
+        """Get port-profiles on the physical switch."""
 
         LOG.warning("BrcdPluginV2:get_networks() called")
 
@@ -287,6 +284,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return nets
 
     def get_network(self, context, id, fields=None):
+        """Get specific port-profile."""
         net = super(BrcdPluginV2, self).get_network(context, id, None)
 
         bnet = brcd_db.get_network(id)
@@ -298,8 +296,8 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         LOG.debug("BrcdPluginV2:update_anetwork() called")
 
     def create_port(self, context, port):
+        """Creat logical port on the switch."""
 
-        LOG.warning("BrcdPluginV2:create_port() called")
         port_id = str(uuid.uuid4())
         port_id = port_id[0:8]
         port['port']['id'] = port_id
@@ -357,39 +355,3 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
     def get_plugin_version(self):
         return PLUGIN_VERSION
-
-
-class VlanBitmap(object):
-
-    vlans = {}
-
-    def __init__(self):
-        for x in xrange(2, 4094):
-            self.vlans[x] = None
-        nets = brcd_db.get_networks()
-        for net in nets:
-            uuid = net['id']
-            vlan = net['vlan']
-            if vlan is not None:
-                self.vlans[int(vlan)] = 1
-        return
-
-    def getNextVlan(self, vlan_id):
-        if vlan_id is None:
-            for x in xrange(2, 4094):
-                if self.vlans[x] is None:
-                    self.vlans[x] = 1
-                    return x
-        else:
-            if self.vlans[vlan_id] is None:
-                self.vlans[vlan_id] = 1
-                return vlan_id
-            else:
-                return None
-
-    def releaseVlan(self, vlan_id):
-
-        if self.vlans[vlan_id] is not None:
-            self.vlans[vlan_id] = None
-
-        return

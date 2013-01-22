@@ -23,8 +23,8 @@
 Brocade NOS Driver CLI
 """
 
-import sys
 import argparse
+import sys
 import logging
 
 from quantum.plugins.brocade.nos import nosdriver as nos

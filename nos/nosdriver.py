@@ -25,11 +25,9 @@ Quantum network life-cycle management
 import logging
 
 from ncclient import manager
-
 from quantum.plugins.brocade.nos import nctemplates as template
 
 LOG = logging.getLogger(__name__)
-
 SSH_PORT = 22
 
 
