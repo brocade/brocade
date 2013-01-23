@@ -1,8 +1,11 @@
-
 Brocade Openstack Quantum Plugin
 ================================
 
-http://wiki.openstack.org/brocade-quantum-plugin
+( more up-to-date version of these instructions are located at:
+  http://wiki.openstack.org/brocade-quantum-plugin
+)
+
+
 
 Openstack Brocade Quantum Plugin implements the Quantum v2.0 API.
 
@@ -10,8 +13,6 @@ This plugin is meant to orchestrate Brocade VCS switches running NOS, examples o
 
    1. VDX 67xx series of switches
    2. VDX 87xx series of switches
-
-(http://www.brocade.com/products/all/switches/index.page)
 
 Brocade Quantum plugin implements the Quantum v2.0 API. It uses NETCONF at the backend
 to configure the Brocade switch.
@@ -26,6 +27,7 @@ to configure the Brocade switch.
              |            |        |            |          |             |
              |            |        |            |          |             |
              +------------+        +------------+          +-------------+
+
 
 Directory Structure
 ===================
@@ -43,6 +45,7 @@ Normally you will have your Openstack directory structure as follows:
 This repository represents code that will be put into the brocade directory as:
 
          /opt/stack/quantum/quantum/plugins/brocade
+
 
 Configuration
 =============
@@ -86,18 +89,15 @@ Devstack
 Please see special notes for devstack at:
 http://wiki.openstack.org/brocade-quantum-plugin
 
-In order to use Brocade Quantum Plugin, add the following lines in localrc, if localrc
-file does not exist you may have to create one:
+In order to use Brocade Quantum Plugin, add the following lines in localrc, if localrc file doe
+ not exist create one:
 
 ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-cond,cinder,c-sch,c-api,c-vol,n-sch,n-novnc,n-xvnc,n-cauth,horizon,rabbit,quantum,q-svc,q-agt
 Q_PLUGIN=BrcdQuantumPlugin
 
+As part of running devstack/stack.sh, the configuration files is copied as:
 
-As part of using devstack, the files above are copied over from quantum to their
-final destination. So it will be advisable to edit the files appropriately.
-
-  /opt/stack/quantum/etc/quantum.conf -> /etc/quantum/quantum.conf
-  /opt/stack/quantum/etc/quantum/plugins/brocade/brocade.ini -> /etc/quantum/plugins/brocade/brocade.ini
+  % cp /opt/stack/quantum/etc/quantum/plugins/brocade/brocade.ini /etc/quantum/plugins/brocade/brocade.ini
 
   (hence it is important to make any changes to the configuration in:
    /opt/stack/quantum/etc/quantum/plugins/brocade/brocade.ini)
