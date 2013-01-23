@@ -18,7 +18,9 @@
 # Authors:
 # Shiv Haris (sharis@brocade.com)
 # Varma Bhupatiraju (vbhupati@#brocade.com)
+#
 # (Some parts adapted from LinuxBridge Plugin)
+# TODO (shiv) need support for security groups
 #
 import ConfigParser
 import json
@@ -200,11 +202,6 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         self.physical_interface = config.get('PHYSICAL_INTERFACE',
                                              'physical_interface')
 
-        sql_connection = config.get('DATABASE', 'sql_connection')
-        sql_dbpool_enable = False
-        options = {"sql_connection": sql_connection,
-                   "sql_dbpool_enable": sql_dbpool_enable
-                   }
         db.configure_db()
 
         self._drv = nos.NOSdriver()
@@ -248,7 +245,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
     def delete_network(self, context, id):
         """This call to delete the network translates to removing
-        the port-profile
+        the port-profile on the physical switch.
         """
         net = brcd_db.get_network(id)
         vlan_id = net['vlan']
@@ -268,7 +265,9 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return result
 
     def get_networks(self, context, filters=None, fields=None):
-        """Get port-profiles on the physical switch."""
+        """Get port-profiles on the physical switch and look
+        up the vlan that was configured when this network was created
+        """
 
         if filters.get("shared") == [True]:
             return []
@@ -280,7 +279,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return nets
 
     def get_network(self, context, id, fields=None):
-        """Get specific port-profile."""
+        """Get a specific port-profile."""
         net = super(BrcdPluginV2, self).get_network(context, id, None)
 
         bnet = brcd_db.get_network(id)
@@ -289,7 +288,10 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return net
 
     def update_network(self, context, id, network):
-        LOG.debug("BrcdPluginV2:update_anetwork() called")
+        """We do nothing here for now; in future we will could change the vlan,
+        ACL or QOS for the network.
+        """
+        pass
 
     def create_port(self, context, port):
         """Creat logical port on the switch."""
