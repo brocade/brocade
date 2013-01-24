@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (c) 2012 Brocade Communications Systems, Inc.
+# Copyright (c) 2013 Brocade Communications Systems, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,15 +18,15 @@
 # Authors:
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 # Shiv Haris (sharis@brocade.com)
-#
+
 """
 Brocade NOS Driver CLI
 """
 
 import argparse
 import sys
-import logging
 
+from quantum.openstack.common import log as logging
 from quantum.plugins.brocade.nos import nosdriver as nos
 
 LOG = logging.getLogger(__name__)

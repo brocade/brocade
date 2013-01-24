@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright 2012 Brocade Communications System, Inc.
+# Copyright 2013 Brocade Communications System, Inc.
 # All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,15 +18,14 @@
 # Authors:
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 # Shiv Haris (sharis@brocade.com)
-#
+
 """
 Brocade NOS Driver implements NETCONF over SSHv2 for
 Quantum network life-cycle management
 """
 
-import logging
-
 from ncclient import manager
+from quantum.openstack.common import log as logging
 from quantum.plugins.brocade.nos import nctemplates as template
 
 LOG = logging.getLogger(__name__)

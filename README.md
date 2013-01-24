@@ -1,10 +1,12 @@
 Brocade Openstack Quantum Plugin
 ================================
 
-( more up-to-date version of these instructions are located at:
+* up-to-date version of these instructions are located at:
   http://wiki.openstack.org/brocade-quantum-plugin
-)
 
+* N.B.: Please see Prerequisites section  regarding ncclient (netconf client library)
+
+* Supports VCS (Virtual Cluster of Switches)
 
 
 Openstack Brocade Quantum Plugin implements the Quantum v2.0 API.
@@ -31,9 +33,9 @@ to configure the Brocade switch.
 
 Directory Structure
 ===================
-( this paragraph is relevant ONLY if you have download the Brocade Quantum Plugin from:
-  http://www.github.com/brocade/brocade
-)
+(this paragraph is relevant ONLY if you have download the Brocade Quantum Plugin from:
+http://www.github.com/brocade/brocade, if this came to you as part of openstack-quantum
+you can ignore this)
 
 Normally you will have your Openstack directory structure as follows:
 
@@ -47,6 +49,17 @@ This repository represents code that will be put into the brocade directory as:
          /opt/stack/quantum/quantum/plugins/brocade
 
 
+Prerequsites
+============
+
+This plugin requires installation of the python netconf client (ncclient) library:
+
+ncclient v0.3.1 - Python library for NETCONF clients available at http://github.com/brocade/ncclient
+
+  % git clone https://www.github.com/brocade/ncclient
+  % cd ncclient; sudo python ./setup.py install
+
+
 Configuration
 =============
 
@@ -55,21 +68,19 @@ by setting the parameter core_plugin in Quantum:
 
         core_plugin = quantum.plugins.brocade.QuantumPlugin.BrcdPluginV2
 
-
 2. Physical switch configuration parameters and Brocade specific database configuration is specified in
 the configuration file specified in the brocade.ini files:
 
         % cat /etc/quantum/plugins/brocade/brocade.ini
-        
         [SWITCH]
         username = admin
         password = password
         address  = <switch mgmt ip address>
         ostype   = NOS
-        
+
         [DATABASE]
         sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8
-        
+
         (please see list of more configuration parameters in the brocade.ini file)
 
 Running Setup.py
@@ -93,12 +104,12 @@ In order to use Brocade Quantum Plugin, add the following lines in localrc, if l
  not exist create one:
 
 ENABLED_SERVICES=g-api,g-reg,key,n-api,n-crt,n-obj,n-cpu,n-net,n-cond,cinder,c-sch,c-api,c-vol,n-sch,n-novnc,n-xvnc,n-cauth,horizon,rabbit,quantum,q-svc,q-agt
-Q_PLUGIN=BrcdQuantumPlugin
+Q_PLUGIN=brocade
 
 As part of running devstack/stack.sh, the configuration files is copied as:
 
   % cp /opt/stack/quantum/etc/quantum/plugins/brocade/brocade.ini /etc/quantum/plugins/brocade/brocade.ini
 
-  (hence it is important to make any changes to the configuration in:
-   /opt/stack/quantum/etc/quantum/plugins/brocade/brocade.ini)
+(hence it is important to make any changes to the configuration in:
+/opt/stack/quantum/etc/quantum/plugins/brocade/brocade.ini)
 

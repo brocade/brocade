@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright 2012 Brocade Communications System, Inc.
+# Copyright 2013 Brocade Communications System, Inc.
 # All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -18,7 +18,7 @@
 # Authors:
 # Shiv Haris (sharis@brocade.com)
 # Varma Bhupatiraju (vbhupati@#brocade.com)
-#
+
 import os
 import sys
 

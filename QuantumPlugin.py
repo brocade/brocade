@@ -1,6 +1,6 @@
 # vim: tabstop=4 shiftwidth=4 softtabstop=4
 #
-# Copyright 2012 Brocade Communications System, Inc.
+# Copyright 2013 Brocade Communications System, Inc.
 # All rights reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -21,17 +21,16 @@
 #
 # (Some parts adapted from LinuxBridge Plugin)
 # TODO (shiv) need support for security groups
-#
-import ConfigParser
+
+
 import json
 import hashlib
-import logging
 import netaddr
 import os
 import sys
 import traceback
 import urllib
-import uuid
+import pdb
 
 import sqlalchemy as sa
 
@@ -42,7 +41,6 @@ from quantum.common import exceptions as q_exc
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.common import utils
-
 from quantum.db import api as db
 from quantum.db import api as db_api
 from quantum.db import db_base_plugin_v2
@@ -53,19 +51,18 @@ from quantum.db import model_base
 from quantum.db import models_v2
 from quantum.db import quota_db
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
-
 from quantum.openstack.common import cfg
 from quantum.openstack.common import context
+from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
+from quantum.openstack.common import uuidutils as uu_utils
 from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
-
 from quantum.plugins.brocade import vlanbm as vbm
 from quantum.plugins.brocade.db import models as brcd_db
 from quantum.plugins.brocade.nos import nosdriver as nos
 
-CONFIG_FILE = "brocade.ini"
-CONFIG_FILE_PATH = "/etc/quantum/plugins/brocade/"
+
 LOG = logging.getLogger(__name__)
 PLUGIN_VERSION = 0.88
 AGENT_OWNER_PREFIX = "network:"
@@ -188,26 +185,32 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         """Initialize Brocade Plugin, specify switch address
         and db configuration.
         """
-        config = ConfigParser.ConfigParser()
-        configfile = CONFIG_FILE_PATH + CONFIG_FILE
-        LOG.debug("Using BQP configuration file: %s" % configfile)
-        config.read(configfile)
-
         self._switch = {}
-        self._switch['address'] = config.get('SWITCH', 'address')
-        self._switch['port'] = config.get('SWITCH', 'port')
-        self._switch['username'] = config.get('SWITCH', 'username')
-        self._switch['password'] = config.get('SWITCH', 'password')
 
-        self.physical_interface = config.get('PHYSICAL_INTERFACE',
-                                             'physical_interface')
+        switch_opts = [
+            cfg.StrOpt('address', default=''),
+            cfg.StrOpt('username', default=''),
+            cfg.StrOpt('password', default=''),
+            cfg.StrOpt('ostype', default='NOS')]
+
+        physical_interface_opts = [
+            cfg.StrOpt('physical_interface', default='eth0')]
+
+        cfg.CONF.register_opts(switch_opts, "SWITCH")
+        cfg.CONF.register_opts(physical_interface_opts, "PHYSICAL_INTERFACE")
+        cfg.CONF(project='quantum')
+
+        self._switch['address'] = cfg.CONF.SWITCH.address
+        self._switch['username'] = cfg.CONF.SWITCH.username
+        self._switch['password'] = cfg.CONF.SWITCH.password
+
+        self.physical_interface = \
+            cfg.CONF.PHYSICAL_INTERFACE.physical_interface
 
         db.configure_db()
 
         self._drv = nos.NOSdriver()
         self._vbm = vbm.VlanBitmap()
-
-        self.agent_rpc = True
         self._setup_rpc()
 
     def _setup_rpc(self):
@@ -225,15 +228,15 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         self.notifier = AgentNotifierApi(topics.AGENT)
 
     def create_network(self, context, network, policy=None):
-        """This call to create network translate to creation of
+        """This call to create network translates to creation of
         port-profile on the physical switch.
         """
         net = network['network']
         tenant_id = net['tenant_id']
         network_name = net['name']
 
-        net_uuid = str(uuid.uuid4())
-        vlan_id = self._vbm.getNextVlan(None)
+        net_uuid = uu_utils.generate_uuid()
+        vlan_id = self._vbm.get_next_vlan(None)
         sw = self._switch
         self._drv.create_network(sw['address'],
                                  sw['username'],
@@ -251,14 +254,10 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         vlan_id = net['vlan']
 
         sw = self._switch
-        try:
-            self._drv.delete_network(sw['address'],
-                                     sw['username'],
-                                     sw['password'],
-                                     vlan_id)
-        except Exception as ex:
-            raise
-
+        self._drv.delete_network(sw['address'],
+                                 sw['username'],
+                                 sw['password'],
+                                 vlan_id)
         brcd_db.delete_network(id)
         self._vbm.releaseVlan(int(vlan_id))
         result = super(BrcdPluginV2, self).delete_network(context, id)
@@ -269,6 +268,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         up the vlan that was configured when this network was created
         """
 
+        # Current no support for shared networks
         if filters.get("shared") == [True]:
             return []
 
@@ -296,7 +296,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
     def create_port(self, context, port):
         """Creat logical port on the switch."""
 
-        port_id = str(uuid.uuid4())
+        port_id = uu_utils.generate_uuid()
         port_id = port_id[0:8]
         port['port']['id'] = port_id
         admin_state_up = True
@@ -312,12 +312,12 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         vlan_id = bnet['vlan']
 
         try:
-            quantum_db = super(BrcdPluginV2, self).create_port(context, port)
+            quantum_port = super(BrcdPluginV2, self).create_port(context, port)
         except Exception as e:
             raise e
 
         network = self.get_network(context, network_id)
-        interface_mac = quantum_db['mac_address']
+        interface_mac = quantum_port['mac_address']
 
         sw = self._switch
 
@@ -349,8 +349,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         return super(BrcdPluginV2, self).delete_port(context, id)
 
     def get_port(self, context, id, fields=None):
-        quantum_db = super(BrcdPluginV2, self).get_port(context, id, fields)
-        return quantum_db
+        return super(BrcdPluginV2, self).get_port(context, id, fields)
 
     def get_plugin_version(self):
         return PLUGIN_VERSION

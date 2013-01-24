@@ -1,4 +1,4 @@
-# Copyright (c) 2012 Brocade Communications Systems, Inc.
+# Copyright (c) 2013 Brocade Communications Systems, Inc.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -16,7 +16,7 @@
 # Authors:
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 # Shiv Haris (sharis@brocade.com)
-#
+
 """
 Brocade NOS Driver Test
 """
