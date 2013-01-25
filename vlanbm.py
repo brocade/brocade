@@ -22,6 +22,8 @@
 import os
 import sys
 
+from quantum.db import api as db
+from quantum.openstack.common import context
 from quantum.plugins.brocade.db import models as brcd_db
 
 
@@ -29,7 +31,6 @@ class VlanBitmap(object):
 
     # Keep track of the vlans that have been allocated/de-allocated
     # uses a bitmap to do this
-    vlans = {}
 
     def __init__(self):
         self.vlans = {}
@@ -40,12 +41,14 @@ class VlanBitmap(object):
 
         for x in xrange(2, 4094):
             self.vlans[x] = None
-            nets = brcd_db.get_networks()
-            for net in nets:
-                uuid = net['id']
-                vlan = net['vlan']
-                if vlan is not None:
-                    self.vlans[int(vlan)] = 1
+
+        context.session = db.get_session()
+        nets = brcd_db.get_networks(context)
+        for net in nets:
+            uuid = net['id']
+            vlan = net['vlan']
+            if vlan is not None:
+                self.vlans[int(vlan)] = 1
 
     def get_next_vlan(self, vlan_id):
         if vlan_id is None:

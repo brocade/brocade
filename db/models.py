@@ -33,9 +33,9 @@ class Brcd_Network(model_base.BASEV2, models_v2.HasId):
     vlan = sa.Column(sa.String(10))
 
 
-def create_network(id, vlan):
+def create_network(context, id, vlan):
 
-    session = db.get_session()
+    session = context.session
     try:
         net = Brcd_Network(id=id, vlan=vlan)
         session.add(net)
@@ -45,8 +45,8 @@ def create_network(id, vlan):
     return net
 
 
-def delete_network(id):
-    session = db.get_session()
+def delete_network(context, id):
+    session = context.session
     try:
         net = (session.query(Brcd_Network).filter_by(id=id).
                one())
@@ -57,15 +57,15 @@ def delete_network(id):
                     "net_id: %s" % id)
 
 
-def get_network(id):
-    session = db.get_session()
+def get_network(context, id):
+    session = context.session
     return (session.query(Brcd_Network).
             filter_by(id=id).
             first())
 
 
-def get_networks():
-    session = db.get_session()
+def get_networks(context):
+    session = context.session
     try:
         nets = session.query(Brcd_Network).all()
         return nets

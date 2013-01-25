@@ -237,20 +237,21 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
         net_uuid = uu_utils.generate_uuid()
         vlan_id = self._vbm.get_next_vlan(None)
+
         sw = self._switch
         self._drv.create_network(sw['address'],
                                  sw['username'],
                                  sw['password'],
                                  vlan_id)
         network['network']['id'] = net_uuid
-        brcd_db.create_network(net_uuid, vlan_id)
+        brcd_db.create_network(context, net_uuid, vlan_id)
         return super(BrcdPluginV2, self).create_network(context, network)
 
     def delete_network(self, context, id):
         """This call to delete the network translates to removing
         the port-profile on the physical switch.
         """
-        net = brcd_db.get_network(id)
+        net = brcd_db.get_network(context, id)
         vlan_id = net['vlan']
 
         sw = self._switch
@@ -258,7 +259,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
                                  sw['username'],
                                  sw['password'],
                                  vlan_id)
-        brcd_db.delete_network(id)
+        brcd_db.delete_network(context, id)
         self._vbm.releaseVlan(int(vlan_id))
         result = super(BrcdPluginV2, self).delete_network(context, id)
         return result
@@ -274,15 +275,14 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
         nets = super(BrcdPluginV2, self).get_networks(context)
         for net in nets:
-            bnet = brcd_db.get_network(net['id'])
+            bnet = brcd_db.get_network(context, net['id'])
             net['vlan'] = bnet['vlan']
         return nets
 
     def get_network(self, context, id, fields=None):
         """Get a specific port-profile."""
         net = super(BrcdPluginV2, self).get_network(context, id, None)
-
-        bnet = brcd_db.get_network(id)
+        bnet = brcd_db.get_network(context, id)
         net['vlan'] = bnet['vlan']
 
         return net
@@ -308,7 +308,7 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
 
         physical_interface = self.physical_interface
 
-        bnet = brcd_db.get_network(network_id)
+        bnet = brcd_db.get_network(context, network_id)
         vlan_id = bnet['vlan']
 
         try:
