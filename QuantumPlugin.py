@@ -23,54 +23,60 @@
 # TODO (shiv) need support for security groups
 
 
-import json
-import hashlib
-import netaddr
-import os
-import sys
-import traceback
-import urllib
-import pdb
+"""
+Implentation of Brocade Quantum Plugin.
+"""
 
-import sqlalchemy as sa
+from oslo.config import cfg
 
 from quantum.agent import securitygroups_rpc as sg_rpc
-from quantum.api.v2 import attributes
-from quantum.common import constants as q_const
-from quantum.common import exceptions as q_exc
+from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.common import utils
+from quantum.db import agents_db
+from quantum.db import agentschedulers_db
 from quantum.db import api as db
-from quantum.db import api as db_api
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
+from quantum.db import extraroute_db
 from quantum.db import l3_db
 from quantum.db import l3_rpc_base
-from quantum.db import model_base
-from quantum.db import models_v2
-from quantum.db import quota_db
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
-from quantum.openstack.common import cfg
+from quantum.extensions import portbindings
+from quantum.extensions import securitygroup as ext_sg
 from quantum.openstack.common import context
+from quantum.openstack.common import importutils
 from quantum.openstack.common import log as logging
 from quantum.openstack.common import rpc
-from quantum.openstack.common import uuidutils as uu_utils
-from quantum.openstack.common.rpc import dispatcher
 from quantum.openstack.common.rpc import proxy
+from quantum.plugins.brocade.db import models as brocade_db
 from quantum.plugins.brocade import vlanbm as vbm
-from quantum.plugins.brocade.db import models as brcd_db
-from quantum.plugins.brocade.nos import nosdriver as nos
+from quantum import policy
 
 
 LOG = logging.getLogger(__name__)
 PLUGIN_VERSION = 0.88
 AGENT_OWNER_PREFIX = "network:"
+NOS_DRIVER = 'quantum.plugins.brocade.nos.nosdriver.NOSdriver'
+
+SWITCH_OPTS = [cfg.StrOpt('address', default=''),
+               cfg.StrOpt('username', default=''),
+               cfg.StrOpt('password', default='', secret=True),
+               cfg.StrOpt('ostype', default='NOS')
+               ]
+
+PHYSICAL_INTERFACE_OPTS = [cfg.StrOpt('physical_interface', default='eth0')
+                           ]
+
+cfg.CONF.register_opts(SWITCH_OPTS, "SWITCH")
+cfg.CONF.register_opts(PHYSICAL_INTERFACE_OPTS, "PHYSICAL_INTERFACE")
 
 
-class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
-                              l3_rpc_base.L3RpcCallbackMixin,
-                              sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
+class BridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
+                         l3_rpc_base.L3RpcCallbackMixin,
+                         sg_db_rpc.SecurityGroupServerRpcCallbackMixin):
+    """Agent callback."""
 
     RPC_API_VERSION = '1.1'
     # Device names start with "tap"
@@ -84,26 +90,42 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         If a manager would like to set an rpc API version, or support more than
         one class as the target of rpc messages, override this method.
         '''
-        return q_rpc.PluginRpcDispatcher([self])
+        return q_rpc.PluginRpcDispatcher([self,
+                                          agents_db.AgentExtRpcCallback()])
 
     @classmethod
     def get_port_from_device(cls, device):
         """Get port from the brocade specific db."""
-        port = brcd_db.get_port(device[cls.TAP_PREFIX_LEN:])
+
+        # TODO(shh) context is not being passed as
+        # an argument to this function;
+        #
+        # need to be fixed in:
+        # file: quantum/db/securtygroups_rpc_base.py
+        # function: securitygroup_rules_for_devices()
+        # which needs to pass context to us
+
+        # Doing what other plugins are doing
+        session = db.get_session()
+        port = brocade_db.get_port_from_device(
+            session, device[cls.TAP_PREFIX_LEN:])
+
         # TODO(shiv): need to extend the db model to include device owners
         # make it appears that the device owner is of type network
         if port:
             port['device'] = device
             port['device_owner'] = AGENT_OWNER_PREFIX
+            port['binding:vif_type'] = 'bridge'
         return port
 
     def get_device_details(self, rpc_context, **kwargs):
         """Agent requests device details."""
+
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
                   locals())
-        port = brcd_db.get_port(device[self.TAP_PREFIX_LEN:])
+        port = brocade_db.get_port(rpc_context, device[self.TAP_PREFIX_LEN:])
         if port:
             entry = {'device': device,
                      'vlan_id': port.vlan_id,
@@ -115,22 +137,20 @@ class LinuxBridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
 
         else:
             entry = {'device': device}
-            LOG.debug("%s can not be found in database", device)
+            LOG.debug(_("%s can not be found in database"), device)
         return entry
 
     def update_device_down(self, rpc_context, **kwargs):
-        """Device no longer exists on agent"""
+        """Device no longer exists on agent."""
 
-        agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
-        LOG.debug(_("Device %(device)s no longer exists on %(agent_id)s"),
-                  locals())
         port = self.get_port_from_device(device)
         if port:
             entry = {'device': device,
                      'exists': True}
             # Set port status to DOWN
-            db.set_port_status(port['id'], q_const.PORT_STATUS_DOWN)
+            port_id = port['port_id']
+            brocade_db.update_port_state(rpc_context, port_id, False)
         else:
             entry = {'device': device,
                      'exists': False}
@@ -175,43 +195,50 @@ class AgentNotifierApi(proxy.RpcProxy,
                          topic=self.topic_port_update)
 
 
-class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
-    """
-    BrcdluginV2 is a Quantum plugin that provides L2 Virtual Network
-    functionality using VDX.
+class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
+                      extraroute_db.ExtraRoute_db_mixin,
+                      sg_db_rpc.SecurityGroupServerRpcMixin,
+                      agentschedulers_db.AgentSchedulerDbMixin,
+                      agents_db.AgentDbMixin):
+    """BrocadePluginV2 is a Quantum plugin.
+
+    Provides L2 Virtual Network functionality using VDX. Upper
+    layer driver class that interfaces to NETCONF layer below.
+
     """
 
-    def __init__(self, loglevel=None):
+    def __init__(self):
         """Initialize Brocade Plugin, specify switch address
         and db configuration.
         """
-        self._switch = {}
 
-        switch_opts = [
-            cfg.StrOpt('address', default=''),
-            cfg.StrOpt('username', default=''),
-            cfg.StrOpt('password', default=''),
-            cfg.StrOpt('ostype', default='NOS')]
+        self.supported_extension_aliases = ["binding",
+                                            "security-group",
+                                            "extraroute",
+                                            "router",
+                                            "agent_scheduler",
+                                            "agent"
+                                            ]
+        self.binding_view = "extension:port_binding:view"
+        self.binding_set = "extension:port_binding:set"
 
-        physical_interface_opts = [
-            cfg.StrOpt('physical_interface', default='eth0')]
-
-        cfg.CONF.register_opts(switch_opts, "SWITCH")
-        cfg.CONF.register_opts(physical_interface_opts, "PHYSICAL_INTERFACE")
-        cfg.CONF(project='quantum')
-
-        self._switch['address'] = cfg.CONF.SWITCH.address
-        self._switch['username'] = cfg.CONF.SWITCH.username
-        self._switch['password'] = cfg.CONF.SWITCH.password
-
-        self.physical_interface = \
-            cfg.CONF.PHYSICAL_INTERFACE.physical_interface
-
+        self.physical_interface = (cfg.CONF.PHYSICAL_INTERFACE.
+                                   physical_interface)
         db.configure_db()
-
-        self._drv = nos.NOSdriver()
-        self._vbm = vbm.VlanBitmap()
+        self.ctxt = context.get_admin_context()
+        self.ctxt.session = db.get_session()
+        self._vlan_bitmap = vbm.VlanBitmap(self.ctxt)
         self._setup_rpc()
+        self.brocade_init()
+
+    def brocade_init(self):
+        """Brocade specific initialization."""
+
+        self._switch = {'address': cfg.CONF.SWITCH.address,
+                        'username': cfg.CONF.SWITCH.username,
+                        'password': cfg.CONF.SWITCH.password
+                        }
+        self._driver = importutils.import_object(NOS_DRIVER)
 
     def _setup_rpc(self):
         # RPC support
@@ -219,137 +246,225 @@ class BrcdPluginV2(db_base_plugin_v2.QuantumDbPluginV2):
         self.rpc_context = context.RequestContext('quantum', 'quantum',
                                                   is_admin=False)
         self.conn = rpc.create_connection(new=True)
-        self.callbacks = LinuxBridgeRpcCallbacks()
+        self.callbacks = BridgeRpcCallbacks()
         self.dispatcher = self.callbacks.create_rpc_dispatcher()
         self.conn.create_consumer(self.topic, self.dispatcher,
                                   fanout=False)
         # Consume from all consumers in a thread
         self.conn.consume_in_thread()
         self.notifier = AgentNotifierApi(topics.AGENT)
+        self.dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
+        #self.l3_agent_notifier = l3_rpc_agent_api.L3AgentNotify
 
-    def create_network(self, context, network, policy=None):
+    def create_network(self, context, network):
         """This call to create network translates to creation of
         port-profile on the physical switch.
         """
-        net = network['network']
-        tenant_id = net['tenant_id']
-        network_name = net['name']
 
-        net_uuid = uu_utils.generate_uuid()
-        vlan_id = self._vbm.get_next_vlan(None)
+        with context.session.begin(subtransactions=True):
+            net = super(BrocadePluginV2, self).create_network(context, network)
+            net_uuid = net['id']
+            vlan_id = self._vlan_bitmap.get_next_vlan(None)
+            switch = self._switch
+            try:
+                self._driver.create_network(switch['address'],
+                                            switch['username'],
+                                            switch['password'],
+                                            vlan_id)
+            except Exception as e:
+                # Proper formatting
+                LOG.warning(_("Brocade NOS driver:"))
+                LOG.warning(_("%s"), e)
+                LOG.debug(_("Returning the allocated vlan (%d) to the pool"),
+                          vlan_id)
+                self._vlan_bitmap.release_vlan(int(vlan_id))
+                raise Exception("Brocade plugin raised exception, check logs")
 
-        sw = self._switch
-        self._drv.create_network(sw['address'],
-                                 sw['username'],
-                                 sw['password'],
-                                 vlan_id)
-        network['network']['id'] = net_uuid
-        brcd_db.create_network(context, net_uuid, vlan_id)
-        return super(BrcdPluginV2, self).create_network(context, network)
+            brocade_db.create_network(context, net_uuid, vlan_id)
 
-    def delete_network(self, context, id):
+        LOG.info(_("Allocated vlan (%d) from the pool"), vlan_id)
+        return net
+
+    def delete_network(self, context, net_id):
         """This call to delete the network translates to removing
         the port-profile on the physical switch.
         """
-        net = brcd_db.get_network(context, id)
-        vlan_id = net['vlan']
 
-        sw = self._switch
-        self._drv.delete_network(sw['address'],
-                                 sw['username'],
-                                 sw['password'],
-                                 vlan_id)
-        brcd_db.delete_network(context, id)
-        self._vbm.releaseVlan(int(vlan_id))
-        result = super(BrcdPluginV2, self).delete_network(context, id)
+        with context.session.begin(subtransactions=True):
+            result = super(BrocadePluginV2, self).delete_network(context,
+                                                                 net_id)
+            # we must delete all ports in db first (foreign key constraint)
+            # there is no need to delete port in the driver (its a no-op)
+            # (actually: note there is no such call to the driver)
+            bports = brocade_db.get_ports(context, net_id)
+            for bport in bports:
+                brocade_db.delete_port(context, bport['port_id'])
+
+            # find the vlan for this network
+            net = brocade_db.get_network(context, net_id)
+            vlan_id = net['vlan']
+
+            # Tell hw to do remove PP
+            switch = self._switch
+            try:
+                self._driver.delete_network(switch['address'],
+                                            switch['username'],
+                                            switch['password'],
+                                            net_id)
+            except Exception as e:
+                # Proper formatting
+                LOG.warning(_("Brocade NOS driver:"))
+                LOG.warning(_("%s"), e)
+                raise Exception("Brocade plugin raised exception, check logs")
+
+            # now ok to delete the network
+            brocade_db.delete_network(context, net_id)
+
+        # relinquish vlan in bitmap
+        self._vlan_bitmap.release_vlan(int(vlan_id))
         return result
 
-    def get_networks(self, context, filters=None, fields=None):
-        """Get port-profiles on the physical switch and look
-        up the vlan that was configured when this network was created
-        """
-
-        # Current no support for shared networks
-        if filters.get("shared") == [True]:
-            return []
-
-        nets = super(BrcdPluginV2, self).get_networks(context)
-        for net in nets:
-            bnet = brcd_db.get_network(context, net['id'])
-            net['vlan'] = bnet['vlan']
-        return nets
-
-    def get_network(self, context, id, fields=None):
-        """Get a specific port-profile."""
-        net = super(BrcdPluginV2, self).get_network(context, id, None)
-        bnet = brcd_db.get_network(context, id)
-        net['vlan'] = bnet['vlan']
-
-        return net
-
-    def update_network(self, context, id, network):
-        """We do nothing here for now; in future we will could change the vlan,
-        ACL or QOS for the network.
-        """
-        pass
-
     def create_port(self, context, port):
-        """Creat logical port on the switch."""
+        """Create logical port on the switch."""
 
-        port_id = uu_utils.generate_uuid()
-        port_id = port_id[0:8]
-        port['port']['id'] = port_id
-        admin_state_up = True
-
-        port_update = {"port": {"admin_state_up": admin_state_up}}
         tenant_id = port['port']['tenant_id']
         network_id = port['port']['network_id']
-        port_state = "UP"
+        admin_state_up = port['port']['admin_state_up']
 
         physical_interface = self.physical_interface
 
-        bnet = brcd_db.get_network(context, network_id)
-        vlan_id = bnet['vlan']
+        with context.session.begin(subtransactions=True):
+            bnet = brocade_db.get_network(context, network_id)
+            vlan_id = bnet['vlan']
 
-        try:
-            quantum_port = super(BrcdPluginV2, self).create_port(context, port)
-        except Exception as e:
-            raise e
+            quantum_port = super(BrocadePluginV2, self).create_port(context,
+                                                                    port)
+            interface_mac = quantum_port['mac_address']
+            port_id = quantum_port['id']
 
-        network = self.get_network(context, network_id)
-        interface_mac = quantum_port['mac_address']
+            switch = self._switch
 
-        sw = self._switch
+            # convert mac format: xx:xx:xx:xx:xx:xx -> xxxx.xxxx.xxxx
+            mac = self.mac_reformat_62to34(interface_mac)
+            try:
+                self._driver.associate_mac_to_network(switch['address'],
+                                                      switch['username'],
+                                                      switch['password'],
+                                                      vlan_id,
+                                                      mac)
+            except Exception as e:
+                # Proper formatting
+                LOG.warning(_("Brocade NOS driver:"))
+                LOG.warning(_("%s"), e)
+                raise Exception("Brocade plugin raised exception, check logs")
 
-        # Transform mac format: XX:XX:XX:XX:XX:XX -> XXXX.XXXX.XXXX
-        mac = interface_mac.replace(":", "")
-        mac = mac[0:4] + "." + mac[4:8] + "." + mac[8:12]
-        self._drv.associate_mac_to_network(sw['address'],
-                                           sw['username'],
-                                           sw['password'],
-                                           vlan_id,
-                                           mac)
-        p = super(BrcdPluginV2, self).update_port(context,
-                                                  port["port"]["id"],
-                                                  port_update)
-        p['vlan'] = vlan_id
-        brcd_db.create_port(port_id, network_id, physical_interface,
-                            vlan_id, tenant_id, admin_state_up)
-        return p
+            # save to brocade persistent db
+            brocade_db.create_port(context, port_id, network_id,
+                                   physical_interface,
+                                   vlan_id, tenant_id, admin_state_up)
 
-    def update_port(self, context, id, port):
-        #
-        # Currently this does nothing for the physical switch
-        # we will support this for g-vlan (in future)
-        #
-        return super(BrcdPluginV2, self).update_port(context, id, port)
+        # apply any extensions
+        return self._extend_port_dict_binding(context, quantum_port)
 
-    def delete_port(self, context, id):
-        brcd_db.delete_port(id)
-        return super(BrcdPluginV2, self).delete_port(context, id)
+    def delete_port(self, context, port_id):
+        with context.session.begin(subtransactions=True):
+            super(BrocadePluginV2, self).delete_port(context, port_id)
+            brocade_db.delete_port(context, port_id)
 
-    def get_port(self, context, id, fields=None):
-        return super(BrcdPluginV2, self).get_port(context, id, fields)
+    def update_port(self, context, port_id, port):
+        original_port = self.get_port(context, port_id)
+        session = context.session
+        port_updated = False
+        with session.begin(subtransactions=True):
+            # delete the port binding and read it with the new rules
+            if ext_sg.SECURITYGROUPS in port['port']:
+                port['port'][ext_sg.SECURITYGROUPS] = (
+                    self._get_security_groups_on_port(context, port))
+                self._delete_port_security_group_bindings(context, port_id)
+                self._process_port_create_security_group(
+                    context,
+                    port_id,
+                    port['port'][ext_sg.SECURITYGROUPS])
+                port_updated = True
+
+            port = super(BrocadePluginV2, self).update_port(
+                context, port_id, port)
+            self._extend_port_dict_security_group(context, port)
+
+        if original_port['admin_state_up'] != port['admin_state_up']:
+            port_updated = True
+
+        if (original_port['fixed_ips'] != port['fixed_ips'] or
+            not utils.compare_elements(
+                original_port.get(ext_sg.SECURITYGROUPS),
+                port.get(ext_sg.SECURITYGROUPS))):
+            self.notifier.security_groups_member_updated(
+                context, port.get(ext_sg.SECURITYGROUPS))
+
+        if port_updated:
+            self._notify_port_updated(context, port)
+
+        return self._extend_port_dict_binding(context, port)
+
+    def get_port(self, context, port_id, fields=None):
+        with context.session.begin(subtransactions=True):
+            port = super(BrocadePluginV2, self).get_port(
+                context, port_id, fields)
+            self._extend_port_dict_security_group(context, port)
+            self._extend_port_dict_binding(context, port)
+
+        return self._fields(port, fields)
+
+    def get_ports(self, context, filters=None, fields=None):
+        res_ports = []
+        with context.session.begin(subtransactions=True):
+            ports = super(BrocadePluginV2, self).get_ports(context,
+                                                           filters,
+                                                           fields)
+            for port in ports:
+                self._extend_port_dict_security_group(context, port)
+                self._extend_port_dict_binding(context, port)
+                res_ports.append(self._fields(port, fields))
+
+        return res_ports
+
+    def _notify_port_updated(self, context, port):
+        port_id = port['id']
+        bport = brocade_db.get_port(context, port_id)
+        self.notifier.port_update(context, port,
+                                  bport.physical_interface,
+                                  bport.vlan_id)
+
+    def _extend_port_dict_binding(self, context, port):
+        if self._check_view_auth(context, port, self.binding_view):
+            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_BRIDGE
+            port['binding:vif_type'] = portbindings.VIF_TYPE_BRIDGE
+            port[portbindings.CAPABILITIES] = {
+                portbindings.CAP_PORT_FILTER:
+                'security-group' in self.supported_extension_aliases}
+        return port
+
+    def _check_view_auth(self, context, resource, action):
+        return policy.check(context, action, resource)
 
     def get_plugin_version(self):
+        """Get version number of the plugin."""
         return PLUGIN_VERSION
+
+    @staticmethod
+    def mac_reformat_62to34(interface_mac):
+        """Transform MAC address format.
+
+        Transforms from 6 groups of 2 hexadecimal numbers delimited by ":"
+        to 3 groups of 4 hexadecimals numbers delimited by ".".
+
+        :param interface_mac: MAC address in the format xx:xx:xx:xx:xx:xx
+        :type interface_mac: string
+        :returns: MAC address in the format xxxx.xxxx.xxxx
+        :rtype: string
+
+        """
+
+        mac = interface_mac.replace(":", "")
+        mac = mac[0:4] + "." + mac[4:8] + "." + mac[8:12]
+        return mac

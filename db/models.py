@@ -19,104 +19,134 @@
 # Shiv Haris (sharis@brocade.com)
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 
+
+"""
+Brocade specific database schema/model.
+"""
+
 import sqlalchemy as sa
 
-from quantum.db import api as db
 from quantum.db import model_base
 from quantum.db import models_v2
-from quantum.openstack.common import log as logging
-
-LOG = logging.getLogger("BrocadeQuantumAgent")
 
 
-class Brcd_Network(model_base.BASEV2, models_v2.HasId):
+class BrocadeNetwork(model_base.BASEV2, models_v2.HasId):
+    """Schema for brocade network."""
     vlan = sa.Column(sa.String(10))
 
 
-def create_network(context, id, vlan):
-
-    session = context.session
-    try:
-        net = Brcd_Network(id=id, vlan=vlan)
-        session.add(net)
-        session.flush()
-    except Exception as ex:
-        raise
-    return net
-
-
-def delete_network(context, id):
-    session = context.session
-    try:
-        net = (session.query(Brcd_Network).filter_by(id=id).
-               one())
-        session.delete(net)
-        session.flush()
-    except sa.orm.exc.NoResultFound:
-        LOG.warning("delete_network(): NotFound net for "
-                    "net_id: %s" % id)
-
-
-def get_network(context, id):
-    session = context.session
-    return (session.query(Brcd_Network).
-            filter_by(id=id).
-            first())
-
-
-def get_networks(context):
-    session = context.session
-    try:
-        nets = session.query(Brcd_Network).all()
-        return nets
-    except sa.orm.exc.NoResultFound:
-        return None
-
-
-class Brcd_Port(model_base.BASEV2):
+class BrocadePort(model_base.BASEV2):
+    """Schema for brocade port."""
 
     port_id = sa.Column(sa.String(36), primary_key=True, default="")
-    network_id = sa.Column(sa.String(36))
+    network_id = sa.Column(sa.String(36),
+                           sa.ForeignKey("brocadenetworks.id"),
+                           nullable=False)
     admin_state_up = sa.Column(sa.Boolean, nullable=False)
     physical_interface = sa.Column(sa.String(36))
     vlan_id = sa.Column(sa.String(36))
     tenant_id = sa.Column(sa.String(36))
 
 
-def create_port(port_id, network_id, physical_interface,
+def create_network(context, net_id, vlan):
+    """Create a brocade specific network/port-profiles."""
+
+    session = context.session
+    with session.begin(subtransactions=True):
+        net = BrocadeNetwork(id=net_id, vlan=vlan)
+        session.add(net)
+
+    return net
+
+
+def delete_network(context, net_id):
+    """Delete a brocade specific network/port-profiles."""
+
+    session = context.session
+    with session.begin(subtransactions=True):
+        net = (session.query(BrocadeNetwork).filter_by(id=net_id).first())
+        if net is not None:
+            session.delete(net)
+
+
+def get_network(context, net_id, fields=None):
+    """Get brocade specific network, with vlan extension."""
+
+    session = context.session
+    return (session.query(BrocadeNetwork).filter_by(id=net_id).first())
+
+
+def get_networks(context, filters=None, fields=None):
+    """Get all brocade specific networks."""
+
+    session = context.session
+    try:
+        nets = session.query(BrocadeNetwork).all()
+        return nets
+    except sa.exc.SQLAlchemyError:
+        return None
+
+
+def create_port(context, port_id, network_id, physical_interface,
                 vlan_id, tenant_id, admin_state_up):
+    """Create a brocade specific port, has policy like vlan."""
 
-    session = db.get_session()
-
-    try:
-        port = Brcd_Port(port_id=port_id,
-                         network_id=network_id,
-                         physical_interface=physical_interface,
-                         vlan_id=vlan_id,
-                         admin_state_up=admin_state_up,
-                         tenant_id=tenant_id)
+    # port_id is truncated: since the linux-bridge tap device names are
+    # based on truncated port id, this enables port lookups using
+    # tap devices
+    port_id = port_id[0:11]
+    session = context.session
+    with session.begin(subtransactions=True):
+        port = BrocadePort(port_id=port_id,
+                           network_id=network_id,
+                           physical_interface=physical_interface,
+                           vlan_id=vlan_id,
+                           admin_state_up=admin_state_up,
+                           tenant_id=tenant_id)
         session.add(port)
-        session.flush()
-    except Exception as ex:
-        raise
     return port
 
 
-def get_port(port_id):
+def get_port(context, port_id):
+    """get a brocade specific port."""
 
-    session = db.get_session()
-    port = (session.query(Brcd_Port).
-            filter_by(port_id=port_id).
-            first())
+    port_id = port_id[0:11]
+    session = context.session
+    port = (session.query(BrocadePort).filter_by(port_id=port_id).first())
     return port
 
 
-def delete_port(port_id):
-    session = db.get_session()
-    try:
-        port = (session.query(Brcd_Port).filter_by(port_id=port_id).one())
-        session.delete(port)
-        session.flush()
-    except sa.orm.exc.NoResultFound:
-        LOG.warning("del_port(): NotFound net for "
-                    "port_id: %s" % id)
+def get_ports(context, network_id=None):
+    """get a brocade specific port."""
+
+    session = context.session
+    ports = (session.query(BrocadePort).filter_by(network_id=network_id).all())
+    return ports
+
+
+def delete_port(context, port_id):
+    """delete brocade specific port."""
+
+    port_id = port_id[0:11]
+    session = context.session
+    with session.begin(subtransactions=True):
+        port = (session.query(BrocadePort).filter_by(port_id=port_id).first())
+        if port is not None:
+            session.delete(port)
+
+
+def get_port_from_device(session, port_id):
+    """get port from the tap device."""
+
+    # device is same as truncated port_id
+    port = (session.query(BrocadePort).filter_by(port_id=port_id).first())
+    return port
+
+
+def update_port_state(context, port_id, admin_state_up):
+    """Update port attributes."""
+
+    port_id = port_id[0:11]
+    session = context.session
+    session.query(BrocadePort).filter_by(
+        port_id=port_id).update({'admin_state_up': admin_state_up})

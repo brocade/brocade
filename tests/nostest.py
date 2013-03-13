@@ -17,10 +17,10 @@
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 # Shiv Haris (sharis@brocade.com)
 
+
 """
 Brocade NOS Driver Test
 """
-
 import sys
 
 from quantum.plugins.brocade.nos import nosdriver as nos
@@ -42,6 +42,7 @@ def nostest(host, username, password):
     with driver.connect(host, username, password) as mgr:
         print driver.get_port_profiles(mgr)
         print driver.get_port_profile(mgr, 'default')
+
 
 if __name__ == '__main__':
     nostest(sys.argv[1], sys.argv[2], sys.argv[3])

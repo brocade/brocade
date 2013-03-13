@@ -19,12 +19,11 @@
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 # Shiv Haris (sharis@brocade.com)
 
+
 """
 Brocade NOS Driver CLI
 """
-
 import argparse
-import sys
 
 from quantum.openstack.common import log as logging
 from quantum.plugins.brocade.nos import nosdriver as nos
@@ -55,19 +54,21 @@ class NOSCli(object):
             print usage_desc
             exit(0)
 
-    def _create(self, id):
-        self.driver.create_network(self.host, self.username, self.password, id)
+    def _create(self, net_id):
+        self.driver.create_network(self.host, self.username, self.password,
+                                   net_id)
 
-    def _delete(self, id):
-        self.driver.delete_network(self.host, self.username, self.password, id)
+    def _delete(self, net_id):
+        self.driver.delete_network(self.host, self.username, self.password,
+                                   net_id)
 
-    def _associate(self, id, mac):
+    def _associate(self, net_id, mac):
         self.driver.associate_mac_to_network(
-            self.host, self.username, self.password, id, mac)
+            self.host, self.username, self.password, net_id, mac)
 
-    def _dissociate(self, id, mac):
+    def _dissociate(self, net_id, mac):
         self.driver.dissociate_mac_from_network(
-            self.host, self.username, self.password, id, mac)
+            self.host, self.username, self.password, net_id, mac)
 
 
 usage_desc = """
@@ -87,8 +88,6 @@ parser.add_argument('--password', default='password')
 parser.add_argument('cmd')
 parser.add_argument('otherargs', nargs='*')
 args = parser.parse_args()
-
-#print args
 
 noscli = NOSCli(args.ip, args.username, args.password)
 noscli.execute(args.cmd)

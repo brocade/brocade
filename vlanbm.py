@@ -19,50 +19,43 @@
 # Shiv Haris (sharis@brocade.com)
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 
-import os
-import sys
 
-from quantum.db import api as db
-from quantum.openstack.common import context
-from quantum.plugins.brocade.db import models as brcd_db
+"""
+A Vlan Bitmap class to handle allocation/de-allocation of vlan ids.
+"""
+from quantum.plugins.brocade.db import models as brocade_db
+
+
+MIN_VLAN = 2
+MAX_VLAN = 4094
 
 
 class VlanBitmap(object):
+    """Setup a vlan bitmap for allocation/de-allocation."""
 
     # Keep track of the vlans that have been allocated/de-allocated
     # uses a bitmap to do this
 
-    def __init__(self):
-        self.vlans = {}
-        #for net in brcd_db.get_networks():
-        #if net['vlan']:
-        #vlan = net['vlan']
-        #self.vlans[int(vlan)] = True
+    def __init__(self, ctxt):
+        """initialize the vlan as a set."""
+        self.vlans = set(int(net['vlan'])
+                         for net in brocade_db.get_networks(ctxt)
+                         if net['vlan']
+                         )
 
-        for x in xrange(2, 4094):
-            self.vlans[x] = None
+    def get_next_vlan(self, vlan_id=None):
+        """try to get a specific vlan if requested
+        or get the next vlan.
+        """
+        min_vlan_search = vlan_id or MIN_VLAN
+        max_vlan_search = (vlan_id and vlan_id + 1) or MAX_VLAN
 
-        context.session = db.get_session()
-        nets = brcd_db.get_networks(context)
-        for net in nets:
-            uuid = net['id']
-            vlan = net['vlan']
-            if vlan is not None:
-                self.vlans[int(vlan)] = 1
-
-    def get_next_vlan(self, vlan_id):
-        if vlan_id is None:
-            for x in xrange(2, 4094):
-                if self.vlans[x] is None:
-                    self.vlans[x] = True
-                    return x
-        else:
-            if self.vlans[vlan_id] is None:
-                self.vlans[vlan_id] = True
-                return vlan_id
-            else:
-                return None
+        for vlan in xrange(min_vlan_search, max_vlan_search):
+            if vlan not in self.vlans:
+                self.vlans.add(vlan)
+                return vlan
 
     def release_vlan(self, vlan_id):
-        if self.vlans[vlan_id] is not None:
-            self.vlans[vlan_id] = None
+        """return the vlan to the pool."""
+        if vlan_id in self.vlans:
+            self.vlans.remove(vlan_id)

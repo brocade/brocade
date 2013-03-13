@@ -33,9 +33,6 @@ to configure the Brocade switch.
 
 Directory Structure
 ===================
-(this paragraph is relevant ONLY if you have download the Brocade Quantum Plugin from:
-http://www.github.com/brocade/brocade, if this came to you as part of openstack-quantum
-you can ignore this)
 
 Normally you will have your Openstack directory structure as follows:
 
@@ -44,7 +41,7 @@ Normally you will have your Openstack directory structure as follows:
          ...
          /opt/stack/quantum/quantum/plugins/
 
-This repository represents code that will be put into the brocade directory as:
+Within this structure, Brocade plugin resides at:
 
          /opt/stack/quantum/quantum/plugins/brocade
 
@@ -66,7 +63,7 @@ Configuration
 1. Specify to Quantum that you will be using the Brocade Plugin - this is done
 by setting the parameter core_plugin in Quantum:
 
-        core_plugin = quantum.plugins.brocade.QuantumPlugin.BrcdPluginV2
+        core_plugin = quantum.plugins.brocade.QuantumPlugin.BrocadePluginV2
 
 2. Physical switch configuration parameters and Brocade specific database configuration is specified in
 the configuration file specified in the brocade.ini files:
@@ -79,7 +76,7 @@ the configuration file specified in the brocade.ini files:
         ostype   = NOS
 
         [DATABASE]
-        sql_connection = mysql://root:pass@localhost/brcd_quantum?charset=utf8
+        sql_connection = mysql://root:pass@localhost/brocade_quantum?charset=utf8
 
         (please see list of more configuration parameters in the brocade.ini file)
 
