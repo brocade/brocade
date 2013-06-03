@@ -20,17 +20,16 @@
 # Varma Bhupatiraju (vbhupati@#brocade.com)
 #
 # (Some parts adapted from LinuxBridge Plugin)
-# TODO (shiv) need support for security groups
+# TODO(shiv) need support for security groups
 
 
-"""
-Implentation of Brocade Quantum Plugin.
-"""
+"""Implentation of Brocade Quantum Plugin."""
 
 from oslo.config import cfg
 
 from quantum.agent import securitygroups_rpc as sg_rpc
 from quantum.api.rpc.agentnotifiers import dhcp_rpc_agent_api
+from quantum.api.rpc.agentnotifiers import l3_rpc_agent_api
 from quantum.common import rpc as q_rpc
 from quantum.common import topics
 from quantum.common import utils
@@ -40,7 +39,6 @@ from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
 from quantum.db import dhcp_rpc_base
 from quantum.db import extraroute_db
-from quantum.db import l3_db
 from quantum.db import l3_rpc_base
 from quantum.db import securitygroups_rpc_base as sg_db_rpc
 from quantum.extensions import portbindings
@@ -52,7 +50,7 @@ from quantum.openstack.common import rpc
 from quantum.openstack.common.rpc import proxy
 from quantum.plugins.brocade.db import models as brocade_db
 from quantum.plugins.brocade import vlanbm as vbm
-from quantum import policy
+from quantum import scheduler
 
 
 LOG = logging.getLogger(__name__)
@@ -71,6 +69,7 @@ PHYSICAL_INTERFACE_OPTS = [cfg.StrOpt('physical_interface', default='eth0')
 
 cfg.CONF.register_opts(SWITCH_OPTS, "SWITCH")
 cfg.CONF.register_opts(PHYSICAL_INTERFACE_OPTS, "PHYSICAL_INTERFACE")
+cfg.CONF.register_opts(scheduler.AGENTS_SCHEDULER_OPTS)
 
 
 class BridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
@@ -85,11 +84,11 @@ class BridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
     TAP_PREFIX_LEN = 3
 
     def create_rpc_dispatcher(self):
-        '''Get the rpc dispatcher for this manager.
+        """Get the rpc dispatcher for this manager.
 
         If a manager would like to set an rpc API version, or support more than
         one class as the target of rpc messages, override this method.
-        '''
+        """
         return q_rpc.PluginRpcDispatcher([self,
                                           agents_db.AgentExtRpcCallback()])
 
@@ -124,7 +123,7 @@ class BridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
         agent_id = kwargs.get('agent_id')
         device = kwargs.get('device')
         LOG.debug(_("Device %(device)s details requested from %(agent_id)s"),
-                  locals())
+                  {'device': device, 'agent_id': agent_id})
         port = brocade_db.get_port(rpc_context, device[self.TAP_PREFIX_LEN:])
         if port:
             entry = {'device': device,
@@ -160,12 +159,12 @@ class BridgeRpcCallbacks(dhcp_rpc_base.DhcpRpcCallbackMixin,
 
 class AgentNotifierApi(proxy.RpcProxy,
                        sg_rpc.SecurityGroupAgentRpcApiMixin):
-    '''Agent side of the linux bridge rpc API.
+    """Agent side of the linux bridge rpc API.
 
     API version history:
         1.0 - Initial version.
 
-    '''
+    """
 
     BASE_RPC_API_VERSION = '1.0'
 
@@ -198,8 +197,7 @@ class AgentNotifierApi(proxy.RpcProxy,
 class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                       extraroute_db.ExtraRoute_db_mixin,
                       sg_db_rpc.SecurityGroupServerRpcMixin,
-                      agentschedulers_db.AgentSchedulerDbMixin,
-                      agents_db.AgentDbMixin):
+                      agentschedulers_db.AgentSchedulerDbMixin):
     """BrocadePluginV2 is a Quantum plugin.
 
     Provides L2 Virtual Network functionality using VDX. Upper
@@ -208,19 +206,14 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
     """
 
     def __init__(self):
-        """Initialize Brocade Plugin, specify switch address
-        and db configuration.
+        """Initialize Brocade Plugin.
+
+        Specify switch address and db configuration.
         """
 
-        self.supported_extension_aliases = ["binding",
-                                            "security-group",
-                                            "extraroute",
-                                            "router",
-                                            "agent_scheduler",
-                                            "agent"
-                                            ]
-        self.binding_view = "extension:port_binding:view"
-        self.binding_set = "extension:port_binding:set"
+        self.supported_extension_aliases = ["binding", "security-group",
+                                            "router", "extraroute",
+                                            "agent", "agent_scheduler"]
 
         self.physical_interface = (cfg.CONF.PHYSICAL_INTERFACE.
                                    physical_interface)
@@ -229,6 +222,10 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.ctxt.session = db.get_session()
         self._vlan_bitmap = vbm.VlanBitmap(self.ctxt)
         self._setup_rpc()
+        self.network_scheduler = importutils.import_object(
+            cfg.CONF.network_scheduler_driver)
+        self.router_scheduler = importutils.import_object(
+            cfg.CONF.router_scheduler_driver)
         self.brocade_init()
 
     def brocade_init(self):
@@ -254,11 +251,13 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         self.conn.consume_in_thread()
         self.notifier = AgentNotifierApi(topics.AGENT)
         self.dhcp_agent_notifier = dhcp_rpc_agent_api.DhcpAgentNotifyAPI()
-        #self.l3_agent_notifier = l3_rpc_agent_api.L3AgentNotify
+        self.l3_agent_notifier = l3_rpc_agent_api.L3AgentNotify
 
     def create_network(self, context, network):
-        """This call to create network translates to creation of
-        port-profile on the physical switch.
+        """Create network.
+
+        This call to create network translates to creation of port-profile on
+        the physical switch.
         """
 
         with context.session.begin(subtransactions=True):
@@ -281,13 +280,17 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 raise Exception("Brocade plugin raised exception, check logs")
 
             brocade_db.create_network(context, net_uuid, vlan_id)
+            self._process_l3_create(context, network['network'], net['id'])
+            self._extend_network_dict_l3(context, net)
 
         LOG.info(_("Allocated vlan (%d) from the pool"), vlan_id)
         return net
 
     def delete_network(self, context, net_id):
-        """This call to delete the network translates to removing
-        the port-profile on the physical switch.
+        """Delete network.
+
+        This call to delete the network translates to removing the
+        port-profile on the physical switch.
         """
 
         with context.session.begin(subtransactions=True):
@@ -323,6 +326,37 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         # relinquish vlan in bitmap
         self._vlan_bitmap.release_vlan(int(vlan_id))
         return result
+
+    def update_network(self, context, id, network):
+
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(BrocadePluginV2, self).update_network(context, id,
+                                                              network)
+            self._process_l3_update(context, network['network'], id)
+            self._extend_network_dict_l3(context, net)
+        return net
+
+    def get_network(self, context, id, fields=None):
+        session = context.session
+        with session.begin(subtransactions=True):
+            net = super(BrocadePluginV2, self).get_network(context,
+                                                           id, None)
+            self._extend_network_dict_l3(context, net)
+
+        return self._fields(net, fields)
+
+    def get_networks(self, context, filters=None, fields=None,
+                     sorts=None, limit=None, marker=None, page_reverse=False):
+        session = context.session
+        with session.begin(subtransactions=True):
+            nets = super(BrocadePluginV2,
+                         self).get_networks(context, filters, None, sorts,
+                                            limit, marker, page_reverse)
+            for net in nets:
+                self._extend_network_dict_l3(context, net)
+
+        return [self._fields(net, fields) for net in nets]
 
     def create_port(self, context, port):
         """Create logical port on the switch."""
@@ -381,15 +415,16 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                 port['port'][ext_sg.SECURITYGROUPS] = (
                     self._get_security_groups_on_port(context, port))
                 self._delete_port_security_group_bindings(context, port_id)
+                # process_port_create_security_group also needs port id
+                port['port']['id'] = port_id
                 self._process_port_create_security_group(
                     context,
-                    port_id,
+                    port['port'],
                     port['port'][ext_sg.SECURITYGROUPS])
                 port_updated = True
 
             port = super(BrocadePluginV2, self).update_port(
                 context, port_id, port)
-            self._extend_port_dict_security_group(context, port)
 
         if original_port['admin_state_up'] != port['admin_state_up']:
             port_updated = True
@@ -410,7 +445,6 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         with context.session.begin(subtransactions=True):
             port = super(BrocadePluginV2, self).get_port(
                 context, port_id, fields)
-            self._extend_port_dict_security_group(context, port)
             self._extend_port_dict_binding(context, port)
 
         return self._fields(port, fields)
@@ -422,7 +456,6 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                                            filters,
                                                            fields)
             for port in ports:
-                self._extend_port_dict_security_group(context, port)
                 self._extend_port_dict_binding(context, port)
                 res_ports.append(self._fields(port, fields))
 
@@ -436,16 +469,11 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
                                   bport.vlan_id)
 
     def _extend_port_dict_binding(self, context, port):
-        if self._check_view_auth(context, port, self.binding_view):
-            port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_BRIDGE
-            port['binding:vif_type'] = portbindings.VIF_TYPE_BRIDGE
-            port[portbindings.CAPABILITIES] = {
-                portbindings.CAP_PORT_FILTER:
-                'security-group' in self.supported_extension_aliases}
+        port[portbindings.VIF_TYPE] = portbindings.VIF_TYPE_BRIDGE
+        port[portbindings.CAPABILITIES] = {
+            portbindings.CAP_PORT_FILTER:
+            'security-group' in self.supported_extension_aliases}
         return port
-
-    def _check_view_auth(self, context, resource, action):
-        return policy.check(context, action, resource)
 
     def get_plugin_version(self):
         """Get version number of the plugin."""
@@ -462,7 +490,6 @@ class BrocadePluginV2(db_base_plugin_v2.QuantumDbPluginV2,
         :type interface_mac: string
         :returns: MAC address in the format xxxx.xxxx.xxxx
         :rtype: string
-
         """
 
         mac = interface_mac.replace(":", "")

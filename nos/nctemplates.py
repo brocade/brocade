@@ -20,10 +20,11 @@
 # Shiv Haris (sharis@brocade.com)
 
 
-"""
-NOS NETCONF XML Configuration Command Templates
+"""NOS NETCONF XML Configuration Command Templates.
+
 Interface Configuration Commands
 """
+
 # Create VLAN (vlan_id)
 CREATE_VLAN_INTERFACE = """
     <config xmlns:xc="urn:ietf:params:xml:ns:netconf:base:1.0">
@@ -115,7 +116,6 @@ CONFIGURE_ALLOWED_VLANS_FOR_VLAN_PROFILE = """
                                 <add>{vlan_id}</add>
                             </vlan>
                         </allowed>
-                        <native-vlan>{vlan_id}</native-vlan>
                     </trunk>
                 </switchport>
             </vlan-profile>
