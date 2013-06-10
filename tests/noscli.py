@@ -20,8 +20,9 @@
 # Shiv Haris (sharis@brocade.com)
 
 
-"""Brocade NOS Driver CLI."""
-
+"""
+Brocade NOS Driver CLI
+"""
 import argparse
 
 from quantum.openstack.common import log as logging

@@ -18,7 +18,9 @@
 # Shiv Haris (sharis@brocade.com)
 
 
-"""Brocade NOS Driver Test."""
+"""
+Brocade NOS Driver Test
+"""
 import sys
 
 from quantum.plugins.brocade.nos import nosdriver as nos
